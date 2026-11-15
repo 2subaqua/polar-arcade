@@ -140,20 +140,20 @@ const LEVELS = {
       ".#.........#.",
       "...#.#.#...#.",
       "......P.#....",
-      "##.#.#.#.#~~~",
-      "..........~~~",
+      "##.#.#.#.#...",
+      ".............",
     ] },
     { name: "Twin igloos", seals: 2, bears: 1, bearSpeed: 2.6, items: ["fish", "snowballs"], events: ["storm"], map: [
       ".............",
       ".#..#...###.#",
-      "..#...#K.....",
+      "..#...#......",
       ".ooo....#ooo.",
       ".o.o#..#.o.o#",
       ".X.o.....o.X.",
       "..#...#.#....",
-      ".....K.K.....",
+      ".............",
       "....#.#......",
-      "..#......#.K.",
+      "..#......#...",
       "....#.P......",
       "...#.....#..#",
       ".............",
@@ -166,12 +166,12 @@ const LEVELS = {
       ".#o.......o#.",
       "..Xooo.oooo#.",
       ".#..#.#...#..",
-      "..#....#...#.",
+      "..#....#.KK#.",
       "....#.#...#..",
       ".#.....#...#.",
-      "...#.P#....#.",
+      "...#.P#...K#.",
       ".#...#.#..#.#",
-      ".............",
+      "........K....",
     ] },
     { name: "Big dome", seals: 2, bears: 2, bearSpeed: 2.8, items: ["fish", "pick"], events: ["storm", "aurora"], map: [
       ".....#......#",
@@ -201,7 +201,7 @@ const LEVELS = {
       "K##.#.#..#.#.",
       "......P.#..#.",
       ".#.#K#.#.#...",
-      ".........#.#.",
+      "..~~~....#.#.",
     ] },
     { name: "Cross", seals: 3, bears: 2, bearSpeed: 2.9, items: ["fish", "snowballs", "pick", "cocoa"], events: ["storm", "aurora"], map: [
       "...H...###...",
@@ -699,7 +699,8 @@ const Input = {
       const std = p.mapping === "standard", hx = std ? 0 : ax[6] || 0, hy = std ? 0 : ax[7] || 0;
       if ((std && b(14)) || ax[0] < -0.5 || hx < -0.5) out.left = 1; if ((std && b(15)) || ax[0] > 0.5 || hx > 0.5) out.right = 1;
       if ((std && b(12)) || ax[1] < -0.5 || hy < -0.5) out.up = 1; if ((std && b(13)) || ax[1] > 0.5 || hy > 0.5) out.down = 1;
-      if (b(0)) out.a = 1; if (b(1)) out.b = 1; if (b(2)) out.x = 1; if (b(3)) out.y = 1; if (b(std ? 9 : 7)) out.pause = 1;
+      const gen = !std && !/xbox|x-box|045e|microsoft|xinput/i.test(p.id || ""), F = gen ? [2, 1, 3, 0] : [0, 1, 2, 3];
+      if (b(F[0])) out.a = 1; if (b(F[1])) out.b = 1; if (b(F[2])) out.x = 1; if (b(F[3])) out.y = 1; if (b(std ? 9 : 7)) out.pause = 1;
     }
     return out;
   },
@@ -2724,8 +2725,20 @@ function render() {
   UI.draw(paused);
 }
 let safeTick = 0;
+// When the page stops drawing (tab closed or hidden, the app in the background, the preview panel shut),
+// the sound stops too: the wind and the music would otherwise keep going with nothing on screen.
+let lastFrame = performance.now(), quietedSound = false;
+setInterval(() => {
+  if (performance.now() - lastFrame > 500 && Sound.ac && Sound.ac.state === "running") {
+    Wind.stop(); const p = Sound.ac.suspend(); if (p && p.catch) p.catch(() => {}); quietedSound = true;
+  }
+}, 250);
+addEventListener("pagehide", () => { Wind.stop(); if (Sound.ac) { const p = Sound.ac.suspend(); if (p && p.catch) p.catch(() => {}); quietedSound = true; } });
+document.addEventListener("visibilitychange", () => { if (document.hidden) Wind.stop(); });
 function frame(now) {
   requestAnimationFrame(frame);
+  lastFrame = performance.now();
+  if (quietedSound && Sound.ac && !document.hidden) { quietedSound = false; const p = Sound.ac.resume(); if (p && p.catch) p.catch(() => {}); }
   if (innerWidth !== View.vw || innerHeight !== View.vh) View.resize();   // catches phone rotation
   else if (++safeTick % 20 === 0) {                 // and a status-bar inset that arrives late (see above)
     const r = document.getElementById("safe").getBoundingClientRect();
