@@ -128,7 +128,7 @@ const LEVELS = {
       "....#...H..#.",
       ".......#.....",
     ] },
-    { name: "Tunnel door", seals: 1, bears: 2, bearSpeed: 2.6, items: ["fish", "cocoa"], events: ["storm"], map: [
+    { name: "Tunnel door", seals: 1, bears: 2, bearSpeed: 2.6, items: ["fish", "cocoa"], events: [], map: [
       "...#......#..",
       "##.#.###.#.#.",
       "..#ooooooo.#.",
@@ -140,20 +140,20 @@ const LEVELS = {
       ".#.........#.",
       "...#.#.#...#.",
       "......P.#....",
-      "##.#.#.#.#...",
-      ".............",
+      "##.#.#.#.#~~~",
+      "..........~~~",
     ] },
-    { name: "Twin igloos", seals: 2, bears: 1, bearSpeed: 2.6, items: ["fish", "snowballs"], events: ["storm"], map: [
+    { name: "Twin igloos", seals: 2, bears: 1, bearSpeed: 2.6, items: ["fish", "snowballs"], events: [], map: [
       ".............",
       ".#..#...###.#",
-      "..#...#......",
+      "..#...#K.....",
       ".ooo....#ooo.",
       ".o.o#..#.o.o#",
       ".X.o.....o.X.",
       "..#...#.#....",
-      ".............",
+      ".....K.K.....",
       "....#.#......",
-      "..#......#...",
+      "..#......#.K.",
       "....#.P......",
       "...#.....#..#",
       ".............",
@@ -166,14 +166,14 @@ const LEVELS = {
       ".#o.......o#.",
       "..Xooo.oooo#.",
       ".#..#.#...#..",
-      "..#....#.KK#.",
+      "..#....#...#.",
       "....#.#...#..",
       ".#.....#...#.",
-      "...#.P#...K#.",
+      "...#.P#....#.",
       ".#...#.#..#.#",
-      "........K....",
+      ".............",
     ] },
-    { name: "Big dome", seals: 2, bears: 2, bearSpeed: 2.8, items: ["fish", "pick"], events: ["storm", "aurora"], map: [
+    { name: "Big dome", seals: 2, bears: 2, bearSpeed: 2.8, items: ["fish", "pick"], events: ["aurora"], map: [
       ".....#......#",
       "####ooooo#.#.",
       "#..oo...oo.#.",
@@ -188,7 +188,7 @@ const LEVELS = {
       "....#...#.#..",
       "....#.......#",
     ] },
-    { name: "Heart", seals: 2, bears: 2, bearSpeed: 2.8, items: ["fish", "snowballs", "pick", "cocoa"], events: ["aurora"], map: [
+    { name: "Heart", seals: 2, bears: 2, bearSpeed: 2.8, items: ["fish", "snowballs", "pick", "cocoa"], events: ["storm", "aurora"], map: [
       ".....####.#..",
       ".######.##.##",
       ".#.oo..#oo#..",
@@ -201,7 +201,7 @@ const LEVELS = {
       "K##.#.#..#.#.",
       "......P.#..#.",
       ".#.#K#.#.#...",
-      "..~~~....#.#.",
+      ".........#.#.",
     ] },
     { name: "Cross", seals: 3, bears: 2, bearSpeed: 2.9, items: ["fish", "snowballs", "pick", "cocoa"], events: ["storm", "aurora"], map: [
       "...H...###...",
