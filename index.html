@@ -2069,7 +2069,7 @@ const Snow = {
   wind: 0, t: 0,
   draw(dt) {
     this.t += dt;
-    const gust = Math.max(0, Math.sin(this.t * 0.23) * Math.sin(this.t * 0.61 + 1)) * 3.2;   // gusts come and go
+    const gust = this.gust = Math.max(0, Math.sin(this.t * 0.23) * Math.sin(this.t * 0.61 + 1)) * 3.2;   // gusts come and go
     const want = 0.35 + Math.sin(this.t * 0.17) * 0.55 + gust;
     this.wind += (want - this.wind) * Math.min(1, dt * 0.8);
     const L = View.left, T = View.top, w = View.right - L, h = View.bottom - T;
@@ -2083,6 +2083,38 @@ const Snow = {
       ctx.fillStyle = `rgba(240,250,255,${a})`;
       ctx.beginPath(); ctx.arc(L + f.x * w, T + f.y * h, sz, 0, TAU); ctx.fill();
     }
+  },
+};
+// The menu's wind ("Fjällvind med byar" from the wind lab): pink noise through a band-pass filter that wanders
+// slowly, and the snow's gusts make it louder and brighter, so what you hear follows what you see.
+const Wind = {
+  on: false, nodes: null, next: 0,
+  start() {
+    const ac = Sound.ac;
+    if (this.on || !ac || ac.state !== "running") return;
+    const n = ac.sampleRate * 6, b = ac.createBuffer(1, n, ac.sampleRate), c = b.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; b0 = 0.997 * b0 + w * 0.029; b1 = 0.985 * b1 + w * 0.032; b2 = 0.95 * b2 + w * 0.048; c[i] = (b0 + b1 + b2) * 0.6; }
+    const src = ac.createBufferSource(); src.buffer = b; src.loop = true;
+    const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 480; bp.Q.value = 0.9;
+    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2400;
+    const g = ac.createGain(); g.gain.value = 0;
+    src.connect(bp); bp.connect(lp); lp.connect(g); g.connect(Sound.master); src.start();
+    this.nodes = { src, bp, g }; this.on = true; this.base = 0.35; this.tone = 480;
+  },
+  update() {
+    if (!this.on) return;
+    const ac = Sound.ac, t = ac.currentTime, k = Math.min(1, (Snow.gust || 0) / 3.2);
+    if (t > this.next) { this.base = 0.26 + Math.random() * 0.16; this.tone = 340 + Math.random() * 260; this.next = t + 2 + Math.random() * 2.5; }
+    this.nodes.g.gain.setTargetAtTime((this.base + k * 0.5) * 0.45, t, 0.5);       // * 0.45: faint, under everything
+    this.nodes.bp.frequency.setTargetAtTime(this.tone + k * 900, t, 0.6);
+  },
+  stop() {
+    if (!this.on) return;
+    const { src, g } = this.nodes, ac = Sound.ac;
+    g.gain.setTargetAtTime(0, ac.currentTime, 0.15);
+    setTimeout(() => { try { src.stop(); } catch (e) {} g.disconnect(); }, 800);
+    this.on = false; this.nodes = null;
   },
 };
 function drawBackdrop() {
@@ -2189,6 +2221,7 @@ const menu = {
   },
   update(dt) {
     this.t += dt;
+    Wind.start(); Wind.update();
     if (this.picking) { this.updatePicker(); return; }
     if ((Input.just.left || Input.just.up) && this.sel > 0) { this.sel--; Sound.play("hop"); }
     if ((Input.just.right || Input.just.down) && this.sel < CARDS.length - (Save.d.save ? 0 : 1)) { this.sel++; Sound.play("hop"); }
@@ -2269,6 +2302,7 @@ function pauseAct(i) {
 }
 let scene = menu, paused = false, last = 0, acc = 0;
 function go(s) {
+  if (s !== menu) Wind.stop();
   pauseSaved = false; Sound.stopAll(); Input.touch = {}; paused = false; scene = s;
 }
 
