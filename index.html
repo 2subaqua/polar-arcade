@@ -1452,6 +1452,8 @@ class Igloo extends Game {
   }
 
   addScore(n) { super.addScore(this.aurora > 0 ? n * 2 : n); }
+  // Points shown over the field are what you actually get: doubled under the northern lights.
+  float(t, ...rest) { super.float(this.aurora > 0 && /^\d+$/.test(t) ? String(+t * 2) : t, ...rest); }
   isGold(r, c) { return this.gold.findIndex(([y, x]) => y === r && x === c); }
 
   /* ---- update ---------------------------------------------------------- */
@@ -1797,10 +1799,10 @@ class Igloo extends Game {
   }
   won() {
     this.state = "won"; this.enemies.forEach(e => { e.stun = 99; });
-    const bonus = this.timeBonus, time = this.clock;
+    const bonus = this.timeBonus, time = this.clock, shown = this.aurora > 0 ? bonus * 2 : bonus;
     Sound.play("tb_win");
     this.after(1.2, () => { if (bonus) this.addScore(bonus); });
-    this.levelDone("Igloo built!\nTime " + time + "   Bonus " + bonus, 3.4);
+    this.levelDone("Igloo built!\nTime " + time + "   Bonus " + shown + (shown !== bonus ? " (x2)" : ""), 3.4);
   }
   // Lose a life. rebuild: start the level over, with the blocks where they were at the start.
   loseLife(rebuild) {
