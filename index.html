@@ -56,6 +56,12 @@ const DEFAULTS = {
     jumpHold: 0.22,      // seconds that holding the button keeps pushing upwards
     jumpBoost: 520,      // how strongly holding pushes: higher = a bigger difference between a tap and a hold
     gravity: 640,        // pulls the skier down: higher = shorter, snappier jumps
+    // Hills. Uphill used to be 300 / 20 / 0.8 (much heavier).
+    uphillPull: 170,     // how hard an uphill slope pulls you back: lower = easier climbs
+    downhillPull: 300,   // how hard a downhill slope speeds you up
+    uphillDrag: 8,       // extra braking on every uphill: lower = easier climbs
+    uphillPole: 1.0,     // how much a push gives uphill compared with on the flat (1 = the same)
+    minSpeed: 40,        // the skier never goes slower than this, not even on the steepest hill
   },
   igloo: {
     seals: 1, bears: 0,  // how many of each at a time
@@ -2508,7 +2514,7 @@ class Ski extends Game {
       let gain = this.poleT >= win[0] && this.poleT <= win[1] ? 26 : this.poleT > win[1] ? 16 : 7;
       if (onIce) { gain = 2; this.float("Slippery!", SK.PX, this.y - 34, 0.5); }
       if (gain === 26) { Sound.play("mb_perfect"); this.perfect = 0.3; } else Sound.play("mb_pole");
-      this.v = Math.min(this.c.maxV + (this.wax > 0 ? 40 : 0), this.v + gain * (uphill ? 0.8 : 1));
+      this.v = Math.min(this.c.maxV + (this.wax > 0 ? 40 : 0), this.v + gain * (uphill ? this.c.uphillPole : 1));
       this.poleT = 0; this.poleAnim = SK.POLE_T;
     }
     if (this.perfect > 0) this.perfect -= dt;
@@ -2517,9 +2523,9 @@ class Ski extends Game {
   move(dt) {
     const s = this.slope(), tuck = this.duck && s < -0.02;
     // gravity along the slope, drag (less when tucked or waxed), and a floor speed so you never stop dead
-    let a = -s * 300 - this.v * (tuck ? 0.03 : this.wax > 0 ? 0.05 : 0.11) - (s > 0 ? 20 : 4);
+    let a = -s * (s > 0 ? this.c.uphillPull : this.c.downhillPull) - this.v * (tuck ? 0.03 : this.wax > 0 ? 0.05 : 0.11) - (s > 0 ? this.c.uphillDrag : 4);
     if (tuck) a += 14;
-    this.v = clamp(this.v + a * dt, 32, this.c.maxV + (this.wax > 0 ? 40 : 0) + (tuck ? 40 : 0));
+    this.v = clamp(this.v + a * dt, this.c.minSpeed, this.c.maxV + (this.wax > 0 ? 40 : 0) + (tuck ? 40 : 0));
     if (this.wax > 0) this.wax -= dt;
     if (this.safe > 0) this.safe -= dt;
     if (this.landT > 0) this.landT -= dt;
