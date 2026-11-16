@@ -51,7 +51,7 @@ const DEFAULTS = {
     creekMax: 44,        // the widest creek (px): wide ones need speed
     wax: false,          // a jar of ski wax somewhere on the stage
     sky: "morning",      // morning, day, afternoon, sunset, dusk, night
-    // The jump. A quick tap jumps about 31 px high (0.6 s in the air); holding the button about 67 px (0.95 s). The skier is ~30 px tall.
+    // The jump. A quick tap jumps about 7 px high (0.3 s in the air); holding the button about 23 px (0.6 s). The skier is ~30 px tall.
     jumpSpeed: 100,      // how hard the skier takes off: higher = a higher (and longer) jump
     jumpHold: 0.22,      // seconds that holding the button keeps pushing upwards
     jumpBoost: 520,      // how strongly holding pushes: higher = a bigger difference between a tap and a hold
@@ -2438,6 +2438,9 @@ class Ski extends Game {
     while (x < this.len - 260) {
       const k = kinds[Math.floor(rnd2() * kinds.length)];
       const slope = Math.abs(this.heightAt(x + 40) - this.heightAt(x - 40));
+      // nothing to jump over on the way uphill (the hare runs towards you, so look further back for it)
+      const climb = this.heightAt(x + 60) - this.heightAt(x - (k === "hare" ? 160 : 110));
+      if ((k === "log" || k === "stone" || k === "hare") && climb > 3) { x += 60; continue; }
       if (k === "creek") {
         if (slope > 4) { x += 60; continue; }
         const w = Math.round(r(26, c.creekMax || 44));
