@@ -1102,30 +1102,48 @@ const Pads = {
     }
     return t;
   },
-  // Igloo Mania: the stick, and Lock above Push under the right thumb.
+  // Igloo Mania: Lock above Push under the right thumb.
   iglooButtons() {
     const r = this.zone(1), rr = Math.min(r.r * 0.46, 28);
     return { x: r.x, y: Math.min(r.y, View.usableBottom - rr * 2 - 8), rr };
   },
+  // Igloo Mania's left thumb: four arrow buttons in a cross (no stick), so the inuit stops exactly where you let go.
+  arrows() {
+    const l = this.zone(-1), k = Math.min(l.r * 0.62, 34);
+    return { x: l.x, y: l.y, k, l };
+  },
+  arrowAt(p) {
+    const A = this.arrows();
+    if (p.y < A.l.top || p.x < A.l.a || p.x > A.l.b) return null;
+    const dx = p.x - A.x, dy = p.y - A.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < A.k * 0.45) return null;     // the middle of the cross does nothing
+    return Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+  },
   readIgloo() {
-    const t = this.readStick(), l = this.zone(-1), r = this.zone(1), b = this.iglooButtons();
-    delete t.a;
-    for (const p of Input.pointers.values()) if (p.y >= r.top && p.x >= r.a && p.x <= r.b) t[p.y < b.y ? "b" : "a"] = true;
-    // the stick is read for its direction only: the inuit walks the way it points most
-    if (t.dir !== undefined) {
-      const c = Math.cos(t.dir), s = Math.sin(t.dir);
-      delete t.left; delete t.right; delete t.up; delete t.down;
-      if (Math.abs(c) > Math.abs(s)) t[c < 0 ? "left" : "right"] = true; else t[s < 0 ? "up" : "down"] = true;
+    const t = {}, r = this.zone(1), b = this.iglooButtons();
+    for (const p of Input.pointers.values()) {
+      if (p.y >= r.top && p.x >= r.a && p.x <= r.b) { t[p.y < b.y ? "b" : "a"] = true; continue; }
+      const d = this.arrowAt(p); if (d) t[d] = true;
     }
+    // a tap so quick that the finger is already up still counts as one step
+    for (const p of Input.taps) { const d = this.arrowAt(p); if (d) t.tap = d; }
     return t;
   },
   drawIgloo() {
-    this.drawStick(null);
-    const { x, y, rr } = this.iglooButtons();
-    for (const [k, a, label, col] of [[-1, "b", "Lock", "rgba(255,255,255,.5)"], [1, "a", "Push", "rgba(90,190,240,.6)"]]) {
-      const cy = y + k * (rr + 3), on = Input.touch[a];
-      ctx.beginPath(); ctx.arc(x, cy, rr, 0, TAU); ctx.fillStyle = on ? "#fff3b0" : col; ctx.fill();
-      text(label, x, cy, { size: 12, color: on ? "#03121a" : "#0b3047" });
+    const { x, y, k } = this.arrows();
+    for (const [d, dx, dy, rot] of [["up", 0, -1, -Math.PI / 2], ["down", 0, 1, Math.PI / 2], ["left", -1, 0, Math.PI], ["right", 1, 0, 0]]) {
+      const cx = x + dx * k, cy = y + dy * k, on = Input.touch[d];
+      rounded(cx - k / 2, cy - k / 2, k, k, 7); ctx.fillStyle = on ? "#fff3b0" : "rgba(90,190,240,.32)"; ctx.fill();
+      ctx.strokeStyle = "rgba(190,240,255,.7)"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+      poly([[k * 0.22, 0], [-k * 0.14, -k * 0.2], [-k * 0.14, k * 0.2]], on ? "#03121a" : "rgba(230,250,255,.95)");
+      ctx.restore();
+    }
+    const { x: bx, y: by, rr } = this.iglooButtons();
+    for (const [kk, a, label, col] of [[-1, "b", "Lock", "rgba(255,255,255,.5)"], [1, "a", "Push", "rgba(90,190,240,.6)"]]) {
+      const cy = by + kk * (rr + 3), on = Input.touch[a];
+      ctx.beginPath(); ctx.arc(bx, cy, rr, 0, TAU); ctx.fillStyle = on ? "#fff3b0" : col; ctx.fill();
+      text(label, bx, cy, { size: 12, color: on ? "#03121a" : "#0b3047" });
     }
   },
   drawStick(label = "Fire", color = "rgba(255,138,61,.55)") {
@@ -1504,6 +1522,7 @@ class Igloo extends Game {
     if (m.carry) return;
     if (m.dizzy > 0) { m.dizzy -= dt; return; }
     if (this.cocoa > 0) this.cocoa -= dt;
+    if (Input.touch.tap) m.queued = Input.touch.tap;      // a tap while still walking is kept for the next step
     const pr = m.r, pc = m.c;
     if (!this.stepWalker(m, this.cocoa > 0 ? IG.WALK * 1.6 : IG.WALK, dt)) return;
     if (m.r !== pr || m.c !== pc) {
@@ -1516,7 +1535,13 @@ class Igloo extends Game {
       }
     }
     m.sliding = false;
-    const want = ["up", "down", "left", "right"].find(held);
+    // On the touch arrows a tap is exactly one step; holding an arrow for a moment keeps walking.
+    const queued = m.queued; m.queued = null;
+    const tdir = ["up", "down", "left", "right"].find(d => Input.touch[d]) || queued;
+    if (tdir !== m.touchDir || queued) { m.touchDir = tdir; m.touchT = 0; m.tapStep = !!tdir; }
+    else if (tdir) m.touchT += dt;
+    const keyWant = ["up", "down", "left", "right"].find(d => Input.held[d]);
+    const want = keyWant || (tdir && (m.tapStep || m.touchT > 0.35) ? tdir : undefined);
     if (m.pushT > 0) m.pushT -= dt;
     const fr = m.r + IG_DIRS[m.dir][0], fc = m.c + IG_DIRS[m.dir][1];
     if (Input.just.a) {
@@ -1546,7 +1571,7 @@ class Igloo extends Game {
     if (!want) return;
     m.dir = want;
     const [dr, dc] = IG_DIRS[want];
-    if (this.canEnter(m.r + dr, m.c + dc)) m.moving = true;
+    if (this.canEnter(m.r + dr, m.c + dc)) { m.moving = true; if (want === tdir) m.tapStep = false; }
     else { m.trying = true; m.walk += dt; }       // walking into a wall or a block: the legs keep going
   }
   // Push the block in front of a walker. The inuit crushes a block that cannot move; seals just give up.
