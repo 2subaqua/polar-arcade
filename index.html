@@ -2792,12 +2792,30 @@ function guSpr(name, x, y, flip = false, k = 1, rot = 0) {
   ctx.restore();
   return true;
 }
-// A background layer, repeated sideways: o is how far it has scrolled, bottom where its lower edge sits.
-function guLayer(name, o, bottom, L, R) {
+// Evening and night: a picture darkened towards night blue, only where it has pixels (so the sky behind stays as it is).
+// Made once per picture and darkness, then kept.
+const guTints = new Map();
+function guTinted(img, k) {
+  if (!k) return img;
+  const key = img.src.length + ":" + img.src.slice(-40) + ":" + k;
+  let c = guTints.get(key);
+  if (!c) {
+    c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+    x.globalCompositeOperation = "source-atop"; x.fillStyle = `rgba(20,30,80,${k})`; x.fillRect(0, 0, c.width, c.height);
+    guTints.set(key, c);
+  }
+  return c;
+}
+// The same darkening for a plain colour.
+function guTintCol(r, g, b, k) { return `rgb(${Math.round(r + (20 - r) * k)},${Math.round(g + (30 - g) * k)},${Math.round(b + (80 - b) * k)})`; }
+// A background layer, repeated sideways: o is how far it has scrolled, bottom where its lower edge sits; k darkens it.
+function guLayer(name, o, bottom, L, R, k = 0) {
   const l = GU_LAYERS[name];
   if (!l || !l.img.complete || !l.img.naturalWidth) return false;
   ctx.imageSmoothingEnabled = true;
-  for (let x = L - mod(o + L, l.w); x < R; x += l.w) ctx.drawImage(l.img, Math.floor(x), bottom - l.h, l.w + 0.5, l.h);
+  const img = guTinted(l.img, k);
+  for (let x = L - mod(o + L, l.w); x < R; x += l.w) ctx.drawImage(img, Math.floor(x), bottom - l.h, l.w + 0.5, l.h);
   ctx.imageSmoothingEnabled = false;
   return true;
 }
@@ -2812,11 +2830,12 @@ const SkiArt = {
     const img = GU_SKY[kind];
     if (img && img.complete && img.naturalWidth) {
       // the picture covers y 0..200 across the screen; a wider screen shows less of it from top to bottom
-      const w = R - L, sh = Math.min(400, 400 * 480 / w);
+      // cover w x 200 without squeezing: a wide screen crops the picture top to bottom, a narrow one (a phone held upright) at the sides
+      const w = R - L, sh = Math.min(400, 960 * 200 / w), sw = Math.min(960, w * 2), sx = (960 - sw) / 2;
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(img, 0, 0, 960, 1, L, T, w, Math.max(0, -T) + 1);       // above the picture: its top colour
-      ctx.drawImage(img, 0, 0, 960, sh, L, 0, w, 200);
-      ctx.drawImage(img, 0, sh - 1, 960, 1, L, 199, w, B - 199);             // below it: its bottom colour
+      ctx.drawImage(img, sx, 0, sw, 1, L, T, w, Math.max(0, -T) + 1);        // above the picture: its top colour
+      ctx.drawImage(img, sx, 0, sw, sh, L, 0, w, 200);
+      ctx.drawImage(img, sx, sh - 1, sw, 1, L, 199, w, B - 199);             // below it: its bottom colour
       ctx.imageSmoothingEnabled = false;
       if (kind === "night" || kind === "dusk") for (let k = 0; k < 24; k++) {   // a few stars twinkle
         const a = Math.max(0, Math.sin(t * (1.3 + k % 5 * 0.4) + k * 2.1));
@@ -2835,7 +2854,7 @@ const SkiArt = {
   },
   tint(kind) { return kind === "night" ? 0.45 : kind === "dusk" ? 0.25 : kind === "sunset" ? 0.12 : 0; },
   hills(o, L, R, kind) {
-    if (guLayer("hills", o, 212, L, R)) { const k = this.tint(kind); if (k) rect(L, 100, R - L, 170, `rgba(20,30,80,${k})`); return; }
+    if (guLayer("hills", o, 212, L, R, this.tint(kind))) return;
     ctx.beginPath(); ctx.moveTo(L, 270);
     for (let x = L; x <= R + 4; x += 4) { const u = x + o; ctx.lineTo(x, 150 - 22 * Math.sin(u / 90) - 14 * Math.sin(u / 37 + 1) - 8 * Math.sin(u / 23)); }
     ctx.lineTo(R, 270); ctx.closePath(); ctx.fillStyle = "#eef7fd"; ctx.fill();
@@ -2843,7 +2862,7 @@ const SkiArt = {
     const k = this.tint(kind); if (k) { rect(L, 100, R - L, 170, `rgba(20,30,80,${k})`); }
   },
   firs(o, L, R, kind) {
-    if (guLayer("trees", o, 207, L, R)) { const k = this.tint(kind); if (k) rect(L, 125, R - L, 85, `rgba(20,30,80,${k * 0.8})`); return; }
+    if (guLayer("trees", o, 207, L, R, this.tint(kind) * 0.8)) return;
     const step = 26;
     for (let i = Math.floor((L + o) / step) - 1; i <= (R + o) / step + 1; i++) {
       const h = 22 + (mod(i * 7, 5)) * 5, x = i * step - o + mod(i * 13, 9), y = 186 + mod(i * 5, 4) * 2;
@@ -2864,8 +2883,10 @@ const SkiArt = {
     const i = g.creeks.indexOf(k), pv = g.creeks[i - 1], nx = g.creeks[i + 1];
     const wy = y + this.WATER_Y, x0 = pv && k.x - pv.x - pv.w < SK.ISLE ? g.sx(pv.x + pv.w) : x - 13, x1 = nx && nx.x - k.x - k.w < SK.ISLE ? g.sx(nx.x) : x + k.w + 13, mix = 0.5 + 0.5 * Math.sin(g.t * 1.3 + k.x);
     ctx.save(); ctx.beginPath(); ctx.rect(x0, wy - 4, x1 - x0, 300); ctx.clip(); ctx.imageSmoothingEnabled = true;
-    rect(x0, wy + 8, x1 - x0, 280, "#0d3f6e");                                // the deep water below the strip
-    for (const [img, a, sp] of [[W.waterA, 1, 7], [W.waterB, mix, 4]]) {
+    const tk = this.tint(g.c.sky) * 0.6;
+    rect(x0, wy + 8, x1 - x0, 280, guTintCol(13, 63, 110, tk));                // the deep water below the strip
+    for (const [img0, a, sp] of [[W.waterA, 1, 7], [W.waterB, mix, 4]]) {
+      const img = guTinted(img0, tk);
       ctx.globalAlpha = a;
       for (let tx = x0 - mod(g.t * sp + k.x, 207.5); tx < x1; tx += 207.5) ctx.drawImage(img, tx, wy, 208, 12);
     }
@@ -2877,16 +2898,18 @@ const SkiArt = {
     const W = GU_WATER, i = g.creeks.indexOf(k), prev = g.creeks[i - 1], next = g.creeks[i + 1];
     const near = (a, b) => a && b && b.x - a.x - a.w < SK.ISLE;
     ctx.save(); ctx.imageSmoothingEnabled = true;
-    if (!near(prev, k)) ctx.drawImage(W.bankL, x + 2 - 647 * 60 / 649, y - 1, 60, 24);
-    if (!near(k, next)) ctx.drawImage(W.bankR, x + k.w - 2 - 1 * 61.5 / 664, y - 1, 61.5, 24);
-    else this.island(x + k.w - 2, g.sx(next.x) + 2, y - 1);
+    const tk = this.tint(g.c.sky) * 0.6;
+    if (!near(prev, k)) ctx.drawImage(guTinted(W.bankL, tk), x + 2 - 647 * 60 / 649, y - 1, 60, 24);
+    if (!near(k, next)) ctx.drawImage(guTinted(W.bankR, tk), x + k.w - 2 - 1 * 61.5 / 664, y - 1, 61.5, 24);
+    else this.island(x + k.w - 2, g.sx(next.x) + 2, y - 1, tk);
     ctx.restore();
   },
   // David's island between two creeks, 22 px high: its two icy ends as they are, the middle stretched to fit.
   // (The picture is 128 x 44 at 2x; each end is 35 px of it.)
-  island(a, b, y) {
-    const img = GU_WATER.island, H = 22, E = 35, e = E / 2, w = b - a;
-    if (!img || !img.complete || !img.naturalWidth) return;
+  island(a, b, y, tk = 0) {
+    const im0 = GU_WATER.island, H = 22, E = 35, e = E / 2, w = b - a;
+    if (!im0 || !im0.complete || !im0.naturalWidth) return;
+    const img = guTinted(im0, tk);
     if (w >= 2 * e + 1) {
       ctx.drawImage(img, 0, 0, E, 44, a, y, e, H);
       ctx.drawImage(img, E, 0, 128 - 2 * E, 44, a + e - 0.5, y, w - 2 * e + 1, H);
@@ -2914,7 +2937,8 @@ const SkiArt = {
       const w = g.d + x - SK.PX, k = g.creeks.find((c, i) => w >= c.x - pit && w <= c.x + c.w + pit || pit && g.creeks[i + 1] && g.creeks[i + 1].x - c.x - c.w < SK.ISLE && w > c.x && w < g.creeks[i + 1].x);
       ctx.lineTo(x, k ? B0 : g.groundY(w));
     }
-    ctx.lineTo(R, 270); ctx.closePath(); ctx.fillStyle = "#ffffff"; ctx.fill();
+    const tk = this.tint(g.c.sky) * 0.6;
+    ctx.lineTo(R, 270); ctx.closePath(); ctx.fillStyle = guTintCol(255, 255, 255, tk); ctx.fill();
     // creeks: dark water between snowy edges
     const art = this.creekArt();
     if (art) for (const k of g.creeks) {                       // the banks go on top of all the water (a double creek's island too)
@@ -2942,7 +2966,6 @@ const SkiArt = {
       }
       ctx.stroke();
     }
-    const k = this.tint(g.c.sky); if (k) rect(L, 150, R - L, 120, `rgba(20,30,80,${k * 0.6})`);
   },
   ice(g, i) {
     const x0 = g.sx(i.x), x1 = g.sx(i.x + i.w);
@@ -3072,9 +3095,9 @@ const SkiArt = {
   },
   // thick snow in the foreground, moving a little faster than the track
   front(o, L, R, B, kind) {
-    if (guLayer("front", o, 272, L, R)) {
-      rect(L, 270, R - L, Math.max(0, B - 270), "#dfeefa");
-      const k = this.tint(kind); if (k) rect(L, 215, R - L, B - 215, `rgba(20,30,80,${k * 0.7})`);
+    const k = this.tint(kind) * 0.7;
+    if (guLayer("front", o, 272, L, R, k)) {
+      rect(L, 270, R - L, Math.max(0, B - 270), guTintCol(223, 238, 250, k));
       return;
     }
     ctx.beginPath(); ctx.moveTo(L, B + 2);
